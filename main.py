@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎤 语音提词器 - 入口文件
+🎤 Readam Teleprompter - 入口文件
 运行: python main.py
 打包: python package.py
 """
@@ -71,11 +71,11 @@ def main():
     setup_logging()
     logger = logging.getLogger(__name__)
     logger.info("=" * 40)
-    logger.info("语音提词器 启动")
+    logger.info("Readam Teleprompter 启动")
     logger.info("=" * 40)
 
     app = QApplication(sys.argv)
-    app.setApplicationName("语音提词器")
+    app.setApplicationName("Readam Teleprompter")
     app.setOrganizationName("Teleprompter")
 
     # 设置中文字体

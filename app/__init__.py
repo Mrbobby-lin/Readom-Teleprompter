@@ -1,1 +1,1 @@
-# 语音提词器 - 应用包
+# Readam Teleprompter - 应用包

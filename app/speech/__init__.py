@@ -1,1 +1,1 @@
-# 语音提词器 - 语音识别引擎包
+# Readam Teleprompter - 语音识别引擎包

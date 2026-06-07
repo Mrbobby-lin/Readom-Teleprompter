@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class TeleprompterWindow(QMainWindow):
-    """语音提词器主窗口（全屏）"""
+    """Readam Teleprompter 主窗口（全屏）"""
 
     # 语音命令定义（中文）
     VOICE_COMMANDS = {
@@ -76,7 +76,7 @@ class TeleprompterWindow(QMainWindow):
 
     def _setup_ui(self):
         """构建全屏提词界面"""
-        self.setWindowTitle("语音提词器")
+        self.setWindowTitle("Readam Teleprompter")
         self.setMinimumSize(800, 600)
 
         # 中央控件
@@ -101,7 +101,7 @@ class TeleprompterWindow(QMainWindow):
         top_layout.setContentsMargins(16, 6, 16, 6)
 
         # 标题
-        title_label = QLabel("🎤 语音提词器")
+        title_label = QLabel("🎤 Readam Teleprompter")
         title_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
         top_layout.addWidget(title_label)
         top_layout.addSpacing(20)
@@ -318,7 +318,7 @@ class TeleprompterWindow(QMainWindow):
             <div style="text-align:center; padding-top:120px; color:#90caf9;">
                 <div style="font-size:48px; margin-bottom:20px;">🎤</div>
                 <div style="font-size:24px; margin-bottom:12px; color:#64b5f6;">
-                    语音提词器
+                    Readam Teleprompter
                 </div>
                 <div style="font-size:16px; color:#bbdefb;">
                     点击上方工具栏「导入 TXT / Word」或「粘贴文本」开始
