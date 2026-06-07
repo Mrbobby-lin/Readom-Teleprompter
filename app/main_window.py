@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QApplication, QSizePolicy, QScrollBar,
     QDialog,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, Slot, QPropertyAnimation, QRect
+from PySide6.QtCore import Qt, QTimer, Signal, Slot, QThread, QObject, QPropertyAnimation, QRect
 from PySide6.QtGui import QFont, QAction, QKeySequence, QTextCursor
 
 from .text_manager import TextManager
@@ -25,10 +25,15 @@ from .audio_test_dialog import AudioTestDialog
 logger = logging.getLogger(__name__)
 
 
-class TeleprompterWindow(QMainWindow):
-    """Readam Teleprompter 主窗口（全屏）"""
+class SpeechWorker(QObject):
+    """语音处理工作线程 - 在后台线程运行语音识别，不阻塞 UI"""
 
-    # 语音命令定义（中文）
+    # 识别结果就绪: text(str), is_new_sentence(bool)
+    speech_result = Signal(str)
+    # 语音命令: cmd(str)
+    voice_command = Signal(str)
+
+    # 语音命令定义（与 TeleprompterWindow 保持一致）
     VOICE_COMMANDS = {
         "pause": ["暂停", "停一下", "停", "歇一下"],
         "resume": ["继续", "开始", "恢复"],
@@ -36,6 +41,37 @@ class TeleprompterWindow(QMainWindow):
         "forward": ["前进", "下一句", "往后"],
         "stop": ["停止", "结束", "关闭"],
     }
+
+    def __init__(self, engine):
+        super().__init__()
+        self.engine = engine
+
+    @Slot(bytes)
+    def process_audio(self, audio_data):
+        """处理音频数据（在后台线程执行）"""
+        try:
+            result = self.engine.process_audio(audio_data)
+            text = result.get("text", "").strip()
+            if not text:
+                return
+
+            # 先检查语音命令
+            clean = re.sub(r"[^一-鿿]", "", text)
+            for cmd, keywords in self.VOICE_COMMANDS.items():
+                for keyword in keywords:
+                    if keyword in clean or keyword in text:
+                        self.voice_command.emit(cmd)
+                        return
+
+            # 正常识别结果
+            self.speech_result.emit(text)
+
+        except Exception as e:
+            logger.error(f"语音处理线程异常: {e}")
+
+
+class TeleprompterWindow(QMainWindow):
+    """Readam Teleprompter 主窗口（全屏）"""
 
     def __init__(self):
         super().__init__()
@@ -46,6 +82,8 @@ class TeleprompterWindow(QMainWindow):
         self.matcher = TextMatcher(self.text_manager)
         self.speech_engine = None
         self.recorder = None
+        self._speech_thread = None
+        self._speech_worker = None
 
         # 状态
         self.is_fullscreen = False
@@ -613,6 +651,23 @@ class TeleprompterWindow(QMainWindow):
         if not self._init_speech_engine():
             return
 
+        # 创建语音处理工作线程（在后台运行，不阻塞 UI）
+        self._speech_worker = SpeechWorker(self.speech_engine)
+        self._speech_thread = QThread()
+        self._speech_worker.moveToThread(self._speech_thread)
+        self._speech_thread.started.connect(
+            lambda: logger.debug("语音处理线程已启动")
+        )
+        self._speech_thread.start()
+
+        # 连接信号：录音线程 → 工作线程（处理语音识别）
+        self.recorder.audio_data_ready.connect(
+            self._speech_worker.process_audio
+        )
+        # 连接信号：工作线程 → 主线程（更新 UI）
+        self._speech_worker.speech_result.connect(self._on_speech_result)
+        self._speech_worker.voice_command.connect(self._on_voice_command)
+
         self.is_listening = True
         self.btn_toggle.setText("⏸ 暂停")
         self.btn_stop.setEnabled(True)
@@ -645,6 +700,24 @@ class TeleprompterWindow(QMainWindow):
     def _stop_listening(self):
         """停止语音识别"""
         self.is_listening = False
+
+        # 停止语音处理工作线程
+        if self._speech_thread:
+            try:
+                self.recorder.audio_data_ready.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                self._speech_worker.speech_result.disconnect()
+                self._speech_worker.voice_command.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            self._speech_thread.quit()
+            if not self._speech_thread.wait(3000):
+                logger.warning("语音处理线程未及时退出")
+            self._speech_thread = None
+            self._speech_worker = None
+
         if self.recorder:
             try:
                 self.recorder.stop()
@@ -733,72 +806,51 @@ class TeleprompterWindow(QMainWindow):
                 QMessageBox.warning(self, "在线引擎启动失败", str(e))
                 return False
 
-        # 初始化录音器
+        # 初始化录音器（不直接连接音频信号，由 _start_listening 创建工作线程后连接）
         from .recorder import AudioRecorder
         self.recorder = AudioRecorder()
         self.recorder.set_device(self.settings.get("mic_device", -1))
-        self.recorder.audio_data_ready.connect(self._on_audio_data)
         self.recorder.status_changed.connect(self._on_recorder_status)
         self.recorder.error_occurred.connect(self._on_recorder_error)
         self.recorder.device_info.connect(self._on_device_info)
 
         return True
 
-    def _on_audio_data(self, audio_data):
-        """处理音频数据（在后台线程调用，需要尽快返回）"""
-        if not self.speech_engine:
-            return
-
-        result = self.speech_engine.process_audio(audio_data)
-        text = result.get("text", "").strip()
-        is_final = result.get("is_final", False)
-
-        if not text:
-            return
-
-        # 先检查语音命令
-        if self._check_voice_command(text):
+    def _on_speech_result(self, text):
+        """处理来自工作线程的语音识别结果（在主线程执行，仅更新 UI）"""
+        if not self.matcher:
             return
 
         # 交给匹配器
         match_result = self.matcher.match(text)
 
-        # 计算读错位置（当前句子内识别文本与原文的差异）
+        # 计算读错位置
         if match_result["confidence"] > 0:
             sent_text = match_result.get("text", "")
             if sent_text:
                 mismatch_ranges = self.matcher.calc_mismatch(text, sent_text)
                 match_result["mismatch_ranges"] = mismatch_ranges
                 self._current_mismatch_ranges = mismatch_ranges
-            # 新句子时清除旧的读错标记
             if match_result.get("is_new_sentence"):
                 self._current_mismatch_ranges = []
 
-        # 只需更新高亮 - 使用防抖
         if match_result["confidence"] > 0:
             self._pending_result = match_result
             self._update_timer.start()
 
-    def _check_voice_command(self, text):
-        """检查是否是语音命令"""
-        clean = re.sub(r"[^一-鿿]", "", text)
-
-        for cmd, keywords in self.VOICE_COMMANDS.items():
-            for keyword in keywords:
-                if keyword in clean or keyword in text:
-                    logger.info(f"语音命令: {keyword} → {cmd}")
-                    if cmd == "pause":
-                        self._pause_listening()
-                    elif cmd == "resume":
-                        self._resume_listening()
-                    elif cmd == "backward":
-                        self._navigate_prev()
-                    elif cmd == "forward":
-                        self._navigate_next()
-                    elif cmd == "stop":
-                        self._stop_listening()
-                    return True
-        return False
+    def _on_voice_command(self, cmd):
+        """处理来自工作线程的语音命令"""
+        logger.info(f"语音命令: {cmd}")
+        if cmd == "pause":
+            self._pause_listening()
+        elif cmd == "resume":
+            self._resume_listening()
+        elif cmd == "backward":
+            self._navigate_prev()
+        elif cmd == "forward":
+            self._navigate_next()
+        elif cmd == "stop":
+            self._stop_listening()
 
     def _on_recorder_status(self, status):
         """录音器状态变化"""
