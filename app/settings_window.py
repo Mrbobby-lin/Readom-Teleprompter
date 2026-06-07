@@ -99,7 +99,7 @@ class SettingsWindow(QDialog):
         self.recog_group = QButtonGroup(self)
 
         self.radio_offline = QRadioButton("离线模式（faster-whisper）- 无需网络")
-        self.radio_online = QRadioButton("在线模式（百度语音）- 需网络和 API Key")
+        self.radio_online = QRadioButton("在线模式（阿里云语音）- 需网络和 API Key")
         self.radio_offline.setChecked(True)
 
         self.recog_group.addButton(self.radio_offline, 0)
@@ -108,22 +108,26 @@ class SettingsWindow(QDialog):
         recog_layout.addWidget(self.radio_offline)
         recog_layout.addWidget(self.radio_online)
 
-        # 百度 API Key 输入
+        # 阿里云 API Key 输入
         api_group = QWidget()
         api_layout = QFormLayout(api_group)
         api_layout.setContentsMargins(0, 8, 0, 0)
 
-        self.api_key_input = QLineEdit()
-        self.api_key_input.setPlaceholderText("请输入百度 API Key")
-        self.secret_key_input = QLineEdit()
-        self.secret_key_input.setPlaceholderText("请输入百度 Secret Key")
+        self.aliyun_appkey_input = QLineEdit()
+        self.aliyun_appkey_input.setPlaceholderText("请输入阿里云 AppKey")
+        self.aliyun_akid_input = QLineEdit()
+        self.aliyun_akid_input.setPlaceholderText("请输入阿里云 AccessKey ID")
+        self.aliyun_aksecret_input = QLineEdit()
+        self.aliyun_aksecret_input.setPlaceholderText("请输入阿里云 AccessKey Secret")
 
-        api_layout.addRow("API Key:", self.api_key_input)
-        api_layout.addRow("Secret Key:", self.secret_key_input)
+        api_layout.addRow("AppKey:", self.aliyun_appkey_input)
+        api_layout.addRow("AccessKey ID:", self.aliyun_akid_input)
+        api_layout.addRow("AccessKey Secret:", self.aliyun_aksecret_input)
 
         api_note = QLabel(
-            "💡 申请地址: console.bce.baidu.com → 语音技术 → 创建应用\n"
-            "免费额度：每天 50000 次调用"
+            "💡 申请地址: nls.console.aliyun.com → 创建项目 → 获取 AppKey\n"
+            "AccessKey 获取: ram.console.aliyun.com/manage/ak\n"
+            "免费额度：每月 20000 次调用"
         )
         api_note.setStyleSheet("color: #757575; font-size: 12px;")
         api_note.setWordWrap(True)
@@ -283,8 +287,9 @@ class SettingsWindow(QDialog):
             self.radio_offline.setChecked(True)
 
         # API Key
-        self.api_key_input.setText(self.settings.get("api_key", ""))
-        self.secret_key_input.setText(self.settings.get("secret_key", ""))
+        self.aliyun_appkey_input.setText(self.settings.get("aliyun_appkey", ""))
+        self.aliyun_akid_input.setText(self.settings.get("aliyun_access_key_id", ""))
+        self.aliyun_aksecret_input.setText(self.settings.get("aliyun_access_key_secret", ""))
 
         # 显示
         self.font_size_slider.setValue(self.settings.get("font_size", 28))
@@ -299,17 +304,23 @@ class SettingsWindow(QDialog):
         """保存设置"""
         # 验证
         if self.radio_online.isChecked():
-            if not self.api_key_input.text().strip():
+            if not self.aliyun_appkey_input.text().strip():
                 QMessageBox.warning(
                     self, "提示",
-                    "在线模式需要填写百度 API Key。\n"
+                    "在线模式需要填写阿里云 AppKey。\n"
                     "如果暂时没有，请先选择离线模式。"
                 )
                 return
-            if not self.secret_key_input.text().strip():
+            if not self.aliyun_akid_input.text().strip():
                 QMessageBox.warning(
                     self, "提示",
-                    "请填写百度 Secret Key。"
+                    "请填写阿里云 AccessKey ID。"
+                )
+                return
+            if not self.aliyun_aksecret_input.text().strip():
+                QMessageBox.warning(
+                    self, "提示",
+                    "请填写阿里云 AccessKey Secret。"
                 )
                 return
 
@@ -317,8 +328,9 @@ class SettingsWindow(QDialog):
             "mic_device": self.mic_combo.currentData(),
             "mic_device_name": self.mic_combo.currentText(),
             "recognition_mode": "online" if self.radio_online.isChecked() else "offline",
-            "api_key": self.api_key_input.text().strip(),
-            "secret_key": self.secret_key_input.text().strip(),
+            "aliyun_appkey": self.aliyun_appkey_input.text().strip(),
+            "aliyun_access_key_id": self.aliyun_akid_input.text().strip(),
+            "aliyun_access_key_secret": self.aliyun_aksecret_input.text().strip(),
             "font_size": self.font_size_slider.value(),
             "line_spacing": round(self.line_spacing_slider.value() / 10, 1),
             "auto_fullscreen": self.auto_fullscreen.isChecked(),
@@ -333,8 +345,9 @@ class SettingsWindow(QDialog):
             "mic_device": -1,
             "mic_device_name": "系统默认",
             "recognition_mode": "offline",
-            "api_key": "",
-            "secret_key": "",
+            "aliyun_appkey": "",
+            "aliyun_access_key_id": "",
+            "aliyun_access_key_secret": "",
             "font_size": 28,
             "line_spacing": 2.0,
             "auto_fullscreen": False,

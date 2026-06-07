@@ -684,7 +684,7 @@ class TeleprompterWindow(QMainWindow):
                     self, "需要下载语音模型",
                     "离线模式需要下载中文语音模型（约 42MB）才能工作。\n\n"
                     "是否现在下载？\n"
-                    "（也可选择「在线模式」使用百度语音 API）",
+                    "（也可选择「在线模式」使用阿里云语音 API）",
                     QMessageBox.StandardButton.Yes
                     | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes,
@@ -709,23 +709,24 @@ class TeleprompterWindow(QMainWindow):
                 QMessageBox.warning(
                     self, "离线引擎启动失败",
                     f"启动失败: {e}\n\n"
-                    "可以尝试在「设置」中切换到在线模式（百度语音）。"
+                    "可以尝试在「设置」中切换到在线模式（阿里云语音）。"
                 )
                 return False
         else:
-            from .speech.baidu_engine import BaiduEngine
-            api_key = self.settings.get("api_key", "")
-            secret_key = self.settings.get("secret_key", "")
-            if not api_key or not secret_key:
+            from .speech.aliyun_engine import AliyunEngine
+            appkey = self.settings.get("aliyun_appkey", "")
+            akid = self.settings.get("aliyun_access_key_id", "")
+            aksecret = self.settings.get("aliyun_access_key_secret", "")
+            if not appkey or not akid or not aksecret:
                 QMessageBox.warning(
                     self, "缺少 API Key",
-                    "在线模式需要填写百度 API Key 和 Secret Key。\n"
+                    "在线模式需要填写阿里云 AppKey、AccessKey ID 和 Secret。\n"
                     "请点击「设置」进行配置。\n"
                     "或在设置中切换到离线模式。"
                 )
                 return False
             try:
-                self.speech_engine = BaiduEngine(api_key, secret_key)
+                self.speech_engine = AliyunEngine(appkey, akid, aksecret)
                 self.speech_engine.initialize()
                 self.status_label.setText("🌐 在线引擎就绪")
             except Exception as e:

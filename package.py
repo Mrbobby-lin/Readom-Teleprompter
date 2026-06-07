@@ -44,7 +44,7 @@ def build():
 
     cmd = [
         "pyinstaller",
-        "--name=语音提词器",
+        "--name=Readam",
         "--onefile",
         "--windowed",
         "--noconfirm",
@@ -87,7 +87,7 @@ def build():
     if result.returncode == 0:
         logger.info("=" * 40)
         logger.info("✅ 打包成功！")
-        exe_path = os.path.join(dist_dir, "语音提词器.exe")
+        exe_path = os.path.join(dist_dir, "Readam.exe")
         if os.path.exists(exe_path):
             size_mb = os.path.getsize(exe_path) / (1024 * 1024)
             logger.info(f"📦 EXE 文件: {exe_path}")
